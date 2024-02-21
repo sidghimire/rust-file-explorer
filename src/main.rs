@@ -1,96 +1,108 @@
-use gtk::prelude::*;
-use gtk::{ Label, Window, WindowType, Box, ListBox, ListBoxRow, Image };
-use std::fs;
-use std::path::PathBuf;
-use dirs;
+use std::{ fs, i32 };
 
-fn main() {
-    let mut currentFiles: Vec<(String, PathBuf, String)> = Vec::new();
-    if let Some(home_dir) = dirs::home_dir() {
-        let directory_path = home_dir;
-        if let Ok(entries) = fs::read_dir(directory_path) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    let file_name = entry.file_name().to_string_lossy().into_owned();
-                    let mut char_iter = file_name.chars();
-                    if let Some(first_char) = char_iter.next() {
-                        if first_char != '.' {
-                            if path.is_dir() {
-                                currentFiles.push((
-                                    file_name.clone(),
-                                    path.clone(),
-                                    String::from("path"),
-                                ));
-                            }
-                            if path.is_file() {
-                                currentFiles.push((
-                                    file_name.clone(),
-                                    path.clone(),
-                                    String::from("file"),
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
+use gtk::{ prelude::*, Button, CssProvider, StyleContext };
+use gtk::{ Label, Window, WindowType, Fixed, Box };
+use pango::FontDescription;
 
-        gtk::init().expect("Failed to initialize GTK");
+fn put_label(x: i32, y: i32, text: &str, font_size: i32, font_family: &str, fixed: &Fixed) {
+    let label = Label::new(Some(text));
+    let mut font_desc = FontDescription::new();
+    font_desc.set_size(font_size * pango::SCALE);
+    font_desc.set_weight(pango::Weight::Ultraheavy);
+    font_desc.set_family(font_family);
+    label.override_font(&font_desc);
+    let vbox = Box::new(gtk::Orientation::Vertical, 0);
+    vbox.pack_start(&label, true, true, 0);
 
-        let data = vec!["Item 1", "Item 2", "Item 3", "Item 4"];
-
-        let (_, list_box) = create_ui(&currentFiles);
-
-        gtk::main();
-    }
+    fixed.put(&vbox, x, y);
 }
 
-fn create_ui(data: &Vec<(String, PathBuf, String)>) -> (Box, ListBox) {
+
+
+fn put_button<'a, F: Fn() + 'static>(fixed: &Fixed, x: i32, y: i32, text: &str, callback: F) {
+    let button = Button::new();
+    button.set_label(&text);
+    button.set_size_request(150, 40);
+    button.connect_clicked(move |_| callback()); // Use |_| to ignore the argument
+    apply_css(
+        &button,
+        "
+        button {
+            background: #cfcfcf;
+            color: #000;
+            border: 0px;
+            border-bottom: 1px solid #dfdfdf;
+            padding: 10px; /* Adjust padding if needed */
+            border-radius: 5px;
+        }
+        "
+    );
+    fixed.put(&button, x, y);
+}
+
+
+
+fn apply_css(widget: &Button, css: &str) {
+    let screen = widget.get_screen().expect("Failed to get screen");
+    let provider = CssProvider::new();
+    CssProvider::load_from_data(&provider, css.as_bytes()).expect("Failed to Load CSS style");
+    StyleContext::add_provider_for_screen(
+        &screen,
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION
+    )
+}
+
+fn get_root_directories() -> Vec<(String, String, bool)> {
+    let paths: fs::ReadDir = fs::read_dir("/").unwrap();
+    let mut all_dir: Vec<(String, String, bool)> = vec![];
+    for path in paths {
+        let entry = path.unwrap();
+        let file_name = entry.file_name().to_string_lossy().into_owned();
+        let isDir = entry.metadata().unwrap().is_dir();
+        let path = entry.path().to_string_lossy().into_owned();
+        all_dir.push((file_name, path, isDir));
+    }
+    all_dir
+}
+fn main() {
+    gtk::init().expect("Failed to initialize GTK.");
+
     let window = Window::new(WindowType::Toplevel);
-    window.set_title("Rust File Explorer");
-    window.set_default_size(600, 600);
+    window.set_title("GTK Rust Text Example");
+    window.set_default_size(950, 1050);
+    let fixed = Fixed::new();
+    window.add(&fixed);
 
-    let label1 = Label::new(None);
-    label1.set_markup("<span size='large'>Rust File Explorer</span>");
+    put_label(20, 20, "File Explorer", 30, "VarelaRound-Regular", &fixed);
 
-    let hbox = Box::new(gtk::Orientation::Horizontal, 0);
-    hbox.pack_start(&label1, false, false, 10);
+    let all_root_dir: Vec<(String, String, bool)> = get_root_directories();
+    for index2 in 0..all_root_dir.len() / 5 {
+        // Slice the `all_root_dir` to get elements for the current row
+        let row_elements = &all_root_dir[index2 * 5..(index2 + 1) * 5];
 
-    let vbox = Box::new(gtk::Orientation::Vertical, 0);
-    vbox.pack_start(&hbox, false, false, 10);
+        // Iterate over each element in the current row
+        for (index, (name, path, isDir)) in row_elements.iter().enumerate() {
+            // Calculate position based on the row index (index2) and element index within the row
+            let x_position = 20 + (index as i32) * 170;
+            let y_position = 140 + 115 * (index2 as i32);
 
-    let list_box = ListBox::new();
-    for item_text in data {
-        if item_text.2 == String::from("path") {
-            // Create a Box to hold the Image and Label
-            let row_box = Box::new(gtk::Orientation::Horizontal, 0);
 
-            // Load the icon (replace "./assets/file.png" with the actual path to your icon)
-            let icon = Image::from_file("./assets/folder.png");
 
-            // Create the label
-            let label = Label::new(Some(&item_text.0));
-
-            // Pack the icon and label into the Box
-            row_box.pack_start(&icon, false, false, 5);
-            row_box.pack_start(&label, false, false, 5);
-
-            // Create a ListBoxRow and add the Box to it
-            let row = ListBoxRow::new();
-            row.add(&row_box);
-            list_box.add(&row);
+            put_button(&fixed, x_position, y_position, &name, || println!("Button Clicked"));
+        
+        
+        
+        
         }
     }
-    vbox.pack_start(&list_box, true, true, 10);
-
-    window.add(&vbox);
-
-    window.connect_destroy(|_| {
+    window.connect_delete_event(|_, _| {
         gtk::main_quit();
+        Inhibit(false)
     });
 
     window.show_all();
+    window.connect_destroy(|_| { gtk::main_quit() });
 
-    (vbox, list_box)
+    gtk::main()
 }
